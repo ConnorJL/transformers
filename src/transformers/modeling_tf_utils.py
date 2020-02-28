@@ -386,7 +386,7 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
 
 
 class TFConv1D(tf.keras.layers.Layer):
-    def __init__(self, nf, nx, initializer_range=0.02, **kwargs):
+    def __init__(self, nf, nx, initializer_range=0.02, weight_regularizer=None, bias_regularizer=None, **kwargs):
         """ TFConv1D layer as defined by Radford et al. for OpenAI GPT (and also used in GPT-2)
             Basically works like a Linear layer but the weights are transposed
         """
@@ -394,12 +394,16 @@ class TFConv1D(tf.keras.layers.Layer):
         self.nf = nf
         self.nx = nx
         self.initializer_range = initializer_range
+        self.weight_regularizer = weight_regularizer
+        self.bias_regularizer = bias_regularizer
 
     def build(self, input_shape):
         self.weight = self.add_weight(
-            "weight", shape=[self.nx, self.nf], initializer=get_initializer(self.initializer_range)
+            "weight", shape=[self.nx, self.nf], initializer=get_initializer(self.initializer_range),
+            regularizer=self.weight_regularizer
         )
-        self.bias = self.add_weight("bias", shape=[1, self.nf], initializer=tf.zeros_initializer())
+        self.bias = self.add_weight("bias", shape=[1, self.nf], initializer=tf.zeros_initializer(),
+                                    regularizer=self.bias_regularizer)
 
     def call(self, x):
         bz, sl = shape_list(x)[:2]
@@ -416,11 +420,12 @@ class TFSharedEmbeddings(tf.keras.layers.Layer):
     """Construct shared token embeddings.
     """
 
-    def __init__(self, vocab_size, hidden_size, initializer_range=None, **kwargs):
+    def __init__(self, vocab_size, hidden_size, initializer_range=None, activity_regularizer=None, **kwargs):
         super().__init__(**kwargs)
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.initializer_range = hidden_size ** -0.5 if initializer_range is None else initializer_range
+        self.activity_regularizer = activity_regularizer
 
     def build(self, input_shape):
         """Build shared word embedding layer
@@ -428,7 +433,8 @@ class TFSharedEmbeddings(tf.keras.layers.Layer):
             https://github.com/tensorflow/models/blob/a009f4fb9d2fc4949e32192a944688925ef78659/official/transformer/v2/embedding_layer.py#L24
         """
         self.weight = self.add_weight(
-            "weight", shape=[self.vocab_size, self.hidden_size], initializer=get_initializer(self.initializer_range)
+            "weight", shape=[self.vocab_size, self.hidden_size], initializer=get_initializer(self.initializer_range),
+            regularizer=self.activity_regularizer
         )
         super().build(input_shape)
 

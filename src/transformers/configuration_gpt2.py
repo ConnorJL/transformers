@@ -20,6 +20,7 @@ import logging
 
 from .configuration_utils import PretrainedConfig
 
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,7 @@ class GPT2Config(PretrainedConfig):
         summary_activation=None,
         summary_proj_to_labels=True,
         summary_first_dropout=0.1,
+        regularization=None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -155,6 +157,7 @@ class GPT2Config(PretrainedConfig):
         self.summary_activation = summary_activation
         self.summary_first_dropout = summary_first_dropout
         self.summary_proj_to_labels = summary_proj_to_labels
+        self.regularization = regularization
 
     @property
     def max_position_embeddings(self):
@@ -171,3 +174,13 @@ class GPT2Config(PretrainedConfig):
     @property
     def num_hidden_layers(self):
         return self.n_layer
+
+    def get_regularizer(self, name):
+        if self.regularization is None:
+            return None
+
+        reg = self.regularization.get(name, None)
+        if reg is not None:
+            reg = tf.keras.regularizers.l2(reg)
+
+        return reg

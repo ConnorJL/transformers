@@ -42,7 +42,6 @@ TF_GPT2_PRETRAINED_MODEL_ARCHIVE_MAP = {
     "distilgpt2": "https://s3.amazonaws.com/models.huggingface.co/bert/distilgpt2-tf_model.h5",
 }
 
-
 def gelu(x):
     """Gaussian Error Linear Unit.
     This is a smoother version of the RELU.
@@ -69,8 +68,10 @@ class TFAttention(tf.keras.layers.Layer):
         self.split_size = n_state
         self.scale = scale
 
-        self.c_attn = TFConv1D(n_state * 3, nx, initializer_range=config.initializer_range, name="c_attn")
-        self.c_proj = TFConv1D(n_state, nx, initializer_range=config.initializer_range, name="c_proj")
+        self.c_attn = TFConv1D(n_state * 3, nx, initializer_range=config.initializer_range, name="c_attn",
+                                weight_regularizer=config.get_regularizer("c_attn_w"), bias_regularizer=config.get_regularizer("c_attn_b"))
+        self.c_proj = TFConv1D(n_state, nx, initializer_range=config.initializer_range, name="c_proj",
+                                weight_regularizer=config.get_regularizer("c_proj_w"), bias_regularizer=config.get_regularizer("c_proj_b"))
         self.attn_dropout = tf.keras.layers.Dropout(config.attn_pdrop)
         self.resid_dropout = tf.keras.layers.Dropout(config.resid_pdrop)
         self.pruned_heads = set()
@@ -159,8 +160,10 @@ class TFMLP(tf.keras.layers.Layer):
     def __init__(self, n_state, config, **kwargs):
         super().__init__(**kwargs)
         nx = config.n_embd
-        self.c_fc = TFConv1D(n_state, nx, initializer_range=config.initializer_range, name="c_fc")
-        self.c_proj = TFConv1D(nx, n_state, initializer_range=config.initializer_range, name="c_proj")
+        self.c_fc = TFConv1D(n_state, nx, initializer_range=config.initializer_range, name="c_fc",
+                                weight_regularizer=config.get_regularizer("c_fc_w"), bias_regularizer=config.get_regularizer("c_fc_b"))
+        self.c_proj = TFConv1D(nx, n_state, initializer_range=config.initializer_range, name="c_proj",
+                                weight_regularizer=config.get_regularizer("c_fc_w"), bias_regularizer=config.get_regularizer("c_fc_b"))
         self.act = gelu
         self.dropout = tf.keras.layers.Dropout(config.resid_pdrop)
 
@@ -206,13 +209,16 @@ class TFGPT2MainLayer(tf.keras.layers.Layer):
         self.n_embd = config.n_embd
 
         self.wte = TFSharedEmbeddings(
-            config.vocab_size, config.hidden_size, initializer_range=config.initializer_range, name="wte"
+            config.vocab_size, config.hidden_size, initializer_range=config.initializer_range, name="wte",
+            activity_regularizer=config.get_regularizer("wte")
         )
         self.wpe = tf.keras.layers.Embedding(
             config.n_positions,
             config.n_embd,
             embeddings_initializer=get_initializer(config.initializer_range),
             name="wpe",
+            embeddings_regularizer=config.get_regularizer("wpe_e"),
+            activity_regularizer=config.get_regularizer("wpe_a")
         )
         self.drop = tf.keras.layers.Dropout(config.embd_pdrop)
         self.h = [TFBlock(config.n_ctx, config, scale=True, name="h_._{}".format(i)) for i in range(config.n_layer)]
@@ -555,10 +561,10 @@ class TFGPT2LMHeadModel(TFGPT2PreTrainedModel):
     GPT2_START_DOCSTRING,
 )
 class TFGPT2DoubleHeadsModel(TFGPT2PreTrainedModel):
-    def __init__(self, config, *inputs, **kwargs):
+    def __init__(self, config, regularization_dict=None, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         config.num_labels = 1
-        self.transformer = TFGPT2MainLayer(config, name="transformer")
+        self.transformer = TFGPT2MainLayer(config, name="transformer", regularization_dict=regularization_dict)
         self.multiple_choice_head = TFSequenceSummary(
             config, initializer_range=config.initializer_range, name="multiple_choice_head"
         )
